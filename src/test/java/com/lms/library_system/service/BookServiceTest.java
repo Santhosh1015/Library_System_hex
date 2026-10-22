@@ -1,9 +1,11 @@
 package com.lms.library_system.service;
 
 import com.lms.library_system.dto.request.BookDto;
+import com.lms.library_system.dto.response.BookResDto;
 import com.lms.library_system.enums.BookStatus;
 import com.lms.library_system.enums.Role;
 import com.lms.library_system.enums.Status;
+import com.lms.library_system.exception.ResourceNotFoundException;
 import com.lms.library_system.model.Book;
 import com.lms.library_system.model.User;
 import com.lms.library_system.repository.BookRepository;
@@ -15,9 +17,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.util.List;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -41,6 +44,8 @@ public class BookServiceTest {
 
         User user = new User();
         user.setUserName(librarianUsername);
+        user.setRole(Role.LIBRARIAN);
+        user.setStatus(Status.ACTIVE);
 
         Book book = new Book();
 
@@ -79,7 +84,7 @@ public class BookServiceTest {
         assertThrows(AccessDeniedException.class, ()-> bookService.addBook(librarianUsername, dto1));
         assertThrows(AccessDeniedException.class, ()-> bookService.addBook(librarianUsername, dto1));
 
-        verify(userRepository, times(1)).findByUserName(librarianUsername);
+        verify(userRepository, times(2)).findByUserName(librarianUsername);
 
     }
 
@@ -107,6 +112,8 @@ public class BookServiceTest {
         verify(bookRepository, times(1)).findById(bookId);
         verify(userRepository, times(1)).findByUserName(librarianUsername);
         verify(bookRepository, times(1)).save(any(Book.class));
+        verifyNoMoreInteractions(bookRepository);
+        verifyNoMoreInteractions(userRepository);
     }
 
     @Test
@@ -141,6 +148,53 @@ public class BookServiceTest {
         verify(bookRepository, times(2)).findById(bookId);
         verify(userRepository, times(2)).findByUserName(librarianUsername);
 
+        verifyNoMoreInteractions(bookRepository);
+        verifyNoMoreInteractions(userRepository);
+    }
+    @Test
+    public void fetchAllBooksTest() {
+        BookResDto bookResDto = new BookResDto( "title1", "author1",BookStatus.AVAILABLE, "isbn1", 1999);
+        when(bookRepository.fetchAllBooks(null, null, null, BookStatus.DELETED)).thenReturn(List.of(bookResDto));
+
+        List<BookResDto> result = bookService.fetchAllBooks(0, 5, null, null, null);
+        assertEquals(1, result.size());
+
+        verify(bookRepository, times(1)).fetchAllBooks(null, null, null, BookStatus.DELETED);
+        verifyNoMoreInteractions(bookRepository);
+    }
+
+    @Test
+    public void fetchBookByIsbnTest() {
+
+        String isbn = "isbn1";
+        Book book = new Book();
+        book.setIsbn(isbn);
+
+        BookResDto bookResDto = new BookResDto( "title1", "author1",BookStatus.AVAILABLE, "isbn1", 1999);
+
+        when(bookRepository.findByIsbn(isbn)).thenReturn(book);
+
+        BookResDto result = bookService.fetchBookByIsbn(isbn);
+
+        assertEquals("isbn1", result.isbn() );
+
+        verify(bookRepository, times(1)).findByIsbn(isbn);
+        verifyNoMoreInteractions(bookRepository);
+    }
+
+    @Test
+    public void fetchBookByIsbnInvalidTest() {
+
+        String isbn = "isbn";
+
+        when(bookRepository.findByIsbn(isbn)).thenReturn(null);
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> bookService.fetchBookByIsbn(isbn));
+
+        verify(bookRepository, times(1)).findByIsbn(isbn);
+
+        verifyNoMoreInteractions(bookRepository);
     }
 
 }
